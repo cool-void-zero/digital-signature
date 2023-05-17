@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <title>Online Digital Signature</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8" />
+  <!-- Bootstrap 5.3.0 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KK94CHFLLe+nY2dmCWGMq91rCGa5gtU4mk92HdvYe+M/SXH301p5ILy+dN9+nJOZ" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe" crossorigin="anonymous"></script>
+  <!-- jQuery 3.7.0 -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.0/dist/jquery.min.js"></script>
+  <!-- Signature Pad 4.1.5 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/signature_pad/4.1.5/signature_pad.umd.min.js" integrity="sha512-ngaalT22GGVs6hGMprLZ39ulFSdC/WUty7LR5AaFxpkDp5TUQ/w11WOIvZBktWOP/e9aA9m/xxpBUNDWpadROA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- pdf-lib 1.17.1 -->
+  <script src="https://unpkg.com/pdf-lib"></script>
+  <!-- Fontawesome 6.4.0 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+
+    html, body {
+        height: 100%;
+    }
+
+    iframe {
+        overflow: hidden;
+        
+        position: absolute;
+        top: 0px;
+        left: 0px;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+    }
+
+    #preview-container {
+        position: relative;
+        height: calc(100vh - 20px);
+        overflow: hidden;
+    }
+
+  </style>
+  <script>
+    
+    const setSignaturePad = ({
+        id = "signature-canvas", 
+        w = 300, h = 150, 
+    }) => {
+        const canvas_element = document.getElementById(id);
+
+        canvas_element.width = w;
+        canvas_element.height = h;
+    }
+
+    const getAdjust = (
+        x_id = "#adjust-x", 
+        y_id = "#adjust-y", 
+        scale_id = "#adjust-scale"
+    ) => ({
+        x: parseInt($(x_id).val()), 
+        y: parseInt($(y_id).val()), 
+        scale: parseFloat($(scale_id).val()), 
+    });
+    
+    const updateIframePDF = async(
+        pdf_bytes, signed_base64 = "", 
+        adjust = getAdjust()
+    ) => {
+        //  not selected pdf file
+        if(!pdf_bytes) return;
+
+        const pdfDoc = await PDFLib.PDFDocument.load(pdf_bytes);
+        const pages = pdfDoc.getPages();
+        
+        if(signed_base64 !== ""){
+            const signed_bytes = await fetch(signed_base64).then((res) => res.arrayBuffer());
+            const signed_object = await pdfDoc.embedPng(signed_bytes);
+            // const signed_image = signed_object.scale(0.30);
+            const signed_image = signed_object.scale(adjust.scale);
+            const { width, height } = signed_image;
+            
+            for(let i=0; i<pages.length; i++)
+                pages[i].drawImage(signed_object, {
+                    ...adjust, 
+                    width, height, 
+                });
+        }
+        
+        const base64_uri = await pdfDoc.saveAsBase64({ dataUri: true });
+        let iframe = document.createElement("iframe");
+        
+        iframe.id = "pdf-1";
+        iframe.style.zIndex = 0;
+
+        iframe.onload = async() => {
+            const delay = (ms = 1000) => 
+                new Promise(resolve => setTimeout(resolve, ms));
+            
+            if($("#pdf-1").length){
+                await delay(500);
+
+                document.getElementById("pdf-1").style.zIndex = 100;
+                document.getElementById("preview-container").removeChild(document.getElementById("pdf"));
+                $("#pdf-1").attr("id", "pdf");
+            }
+        }
+
+        iframe.src = base64_uri;
+        $("#preview-container").append(iframe);
+    }
+
+    const base64ToBuffer = (base64) => {
+        const binary = window.atob(base64);
+        let bytes = new Uint8Array(binary.length);
+        
+        for(let i = 0; i<binary.length; i++)
+            bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    }
+
+    $(document).ready(() => {
+        const url = new URL(window.location.href);
+        const signatue_canvas = document.getElementById("signature-canvas");
+        const signature_pad = new SignaturePad(signatue_canvas);
+        let pdf_bytes = null;
+        
+        //  set the signature pad with url parameter exist or default values
+        setSignaturePad({
+            w: parseFloat(url.searchParams.get("w") || 300), 
+            h: parseFloat(url.searchParams.get("h") || 150), 
+        });
+
+        //  when stop signing will update the preview iframe
+        signature_pad.addEventListener("endStroke", () => {
+            updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+        });
+
+        $("#origin-pdf").bind("change", function(){
+            const file = this.files[0];
+
+            if(file){
+                let fileReader = new FileReader();
+
+                fileReader.onload = function(){
+                    //  get selected pdf file bytes
+                    pdf_bytes = new Uint8Array(this.result);
+                    updateIframePDF(pdf_bytes);
+                };
+
+                fileReader.readAsArrayBuffer(file);
+            }
+        });
+        
+        /*
+            Adjust Signature
+        */
+        $("#adjust-x, #adjust-y, #adjust-scale").bind("change", () => {
+            updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+        });
+
+        /*
+            Signature (Clear, Undo, Confirm)
+        */
+        $("#btn-clear").bind("click", () => {
+            signature_pad.clear();
+            updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+        });
+
+        $("#btn-undo").bind("click", () => {
+            const datas = signature_pad.toData();
+
+            if(datas.length > 0){
+                datas.pop();
+                signature_pad.fromData(datas);
+
+                updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+            }
+        });
+
+        $("#btn-download").bind("click", () => {
+            if(signature_pad.isEmpty() )
+                alert('Please provide a signature first.');
+            else{
+                const base64_pdf = $("#pdf").attr("src");
+                const link = document.createElement ("a");
+                
+                link.href = base64_pdf;
+                link.download = "signed.pdf";
+                link.click();
+            }
+        });
+    
+        $("#btn-share").bind("click", () => {
+            const base64 = $("#pdf").attr("src").split(',')[1] || "";
+
+            if(base64){
+                const buffer = base64ToBuffer(base64);
+                const pdf = new File([buffer], "signed.pdf", { type: "application/pdf" });
+                const files = [pdf];
+
+                if(navigator.canShare({ files }))
+                    navigator.share({ files })
+                        .then(() => {
+                            const msg = `Successful to share the pdf file,`;
+
+                            console.log(msg);
+                            alert(msg);
+                        })
+                        .catch(err => {
+                            const err_msg = `Fail to share pdf file.`;
+
+                            console.error(err);
+                            console.log(err_msg);
+                            alert(err_msg);
+                        });
+                else
+                    alert(`Your browser not support to share pdf file.`);
+            }
+        });
+    });
+
+  </script>
+ </head>
+ <body>
+
+  <div class="container-fluid min-vh-100">
+   <div class="row m-0 w-100 min-vh-100 text-center d-flex align-items-center">
+    <!-- Input PDF File & Signature -->
+    <div class="col-md min-vh-100 p-0">
+     <!-- Row: Choose PDF -->
+     <div class="row mt-2">
+      <div class="col">
+       <div class="my-5">
+        <label for="origin-pdf" class="form-label">
+         <button class="btn px-4 btn-outline-success" onclick="$('#origin-pdf').click()">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span>Input Your PDF</span>
+         </button>
+        </label>
+        <!-- Hide Default File Input -->
+        <input id="origin-pdf" class="form-control d-none" type="file" accept=".pdf" />
+       </div>
+      </div>
+     </div>
+     <!-- End of Row: Choose PDF -->
+     <!-- Row: Adjust Signature -->
+     <div class="row justify-content-md-center">
+      <div class="col-md-auto">
+       <div class="form-floating">
+        <input id="adjust-x" class="form-control" type="number" min="0" step="5" value="275" />
+        <label for="adjust-x">
+         <i class="fa-solid fa-x me-1"></i>
+         <span>Adjust x-axis</span>
+        </label>
+       </div>
+      </div>
+      <div class="col-md-auto">
+        <div class="form-floating">
+         <input id="adjust-y" class="form-control" type="number" min="0" step="5" value="45" />
+         <label for="adjust-y">
+          <i class="fa-solid fa-y me-1"></i>
+          <span>Adjust y-axis</span>
+         </label>
+        </div>
+      </div>
+      
+      <div class="col-md-auto">
+        <div class="form-floating">
+         <input id="adjust-scale" class="form-control" type="number" min="0.1" step="0.1" value="0.3" />
+         <label for="adjust-scale">
+          <i class="fa-solid fa-maximize me-1"></i>
+          <span>Adjust scale</span>
+         </label>
+        </div>
+      </div>
+
+     </div>
+     <!-- End of Row: Adjust Signature -->
+     <!-- Row: Signature Canvas -->
+     <div class="row my-5">
+      <div class="col">
+       <canvas 
+        id="signature-canvas" class="rounded" 
+        height="150" width="300" 
+        style="border: 3px solid black"
+       ></canvas>
+       <p>
+        <i class="fa-solid fa-signature me-1"></i>
+        <small>Sign above</small>
+       </p>
+      </div>
+     </div>
+     <!-- End of Row: Signature Canvas -->
+     <!-- Row: Button Group -->
+     <div class="row">
+      <!-- Clear Button -->
+      <div class="col-lg col-md-6 my-2">
+       <button id="btn-clear" class="btn w-75 px-4 btn-outline-danger">
+        <i class="fa-solid fa-rotate-left me-1"></i>
+        <span>Clear</span>
+       </button>
+      </div>
+      <!-- Undo Button -->
+      <div class="col-lg col-md-6 my-2">
+       <button id="btn-undo" class="btn w-75 px-4 btn-outline-warning">
+        <i class="fa-solid fa-backward-step me-1"></i>
+        <span>Undo</span>
+       </button>
+      </div>
+      <!-- Download Button -->
+      <div class="col-lg col-md-6 my-2">
+       <button id="btn-download" class="btn w-75 px-4 btn-outline-primary">
+        <i class="fa-solid fa-download me-1"></i>
+        <span>Download</span>
+       </button>
+      </div>
+      <!-- Share Button -->
+      <div class="col-lg col-md-6 my-2">
+        <button id="btn-share" class="btn w-75 px-4 btn-outline-success">
+         <i class="fa-solid fa-share-from-square me-1"></i>
+         <span>Share</span>
+        </button>
+       </div>
+     </div>
+     <!-- End of Row: Button Group -->
+    </div>
+    <!-- End of Input PDF File & Signature -->
+
+    <!-- Control & Preview PDF -->
+    <div id="preview-container" class="col-md mx-2 p-0">
+     <iframe src="" id="pdf" style="width: 100%; height: 100%; z-index: 1;"></iframe>
+    </div>
+    <!-- End of Control & Preview PDF -->
+   </div>
+
+ </body>
+</html>
