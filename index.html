@@ -72,17 +72,43 @@
         const pages = pdfDoc.getPages();
         
         if(signed_base64 !== ""){
+            //   text (pdf-lib) setting
+            const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+            const { rgb, degrees } = PDFLib;
+            const opacity = 0.5;
+            //  convert signature to bytes and image (pdf-lib)
             const signed_bytes = await fetch(signed_base64).then((res) => res.arrayBuffer());
             const signed_object = await pdfDoc.embedPng(signed_bytes);
-            // const signed_image = signed_object.scale(0.30);
             const signed_image = signed_object.scale(adjust.scale);
             const { width, height } = signed_image;
             
-            for(let i=0; i<pages.length; i++)
+            for(let i=0; i<pages.length; i++){
                 pages[i].drawImage(signed_object, {
                     ...adjust, 
                     width, height, 
                 });
+
+                /*  [Prepare Watermark]
+
+                const text = `A Sample Signature.`;
+                const text_w = font.widthOfTextAtSize(text, 18);
+                const text_h = font.sizeAtHeight(18);
+
+                console.log(`text_w: ${text_w}`);
+                console.log(`text_h: ${text_h}`);
+
+                pages[i].drawText(text, {
+                    x: adjust.x, 
+                    y: adjust.y - (width / 2), 
+                    // y: adjust.y + (text_h / 2), 
+
+                    size: 18, 
+                    color: rgb(1, 0, 0), 
+                    rotate: degrees(45), 
+                    opacity, 
+                });
+                */
+            }
         }
         
         const base64_uri = await pdfDoc.saveAsBase64({ dataUri: true });
@@ -96,7 +122,7 @@
                 new Promise(resolve => setTimeout(resolve, ms));
             
             if($("#pdf-1").length){
-                await delay(500);
+                await delay(1000);
 
                 document.getElementById("pdf-1").style.zIndex = 100;
                 document.getElementById("preview-container").removeChild(document.getElementById("pdf"));
@@ -199,12 +225,6 @@
 
                 if(navigator.canShare({ files }))
                     navigator.share({ files })
-                        .then(() => {
-                            const msg = `Successful to share the pdf file,`;
-
-                            console.log(msg);
-                            alert(msg);
-                        })
                         .catch(err => {
                             const err_msg = `Fail to share pdf file.`;
 
@@ -293,28 +313,28 @@
      <!-- Row: Button Group -->
      <div class="row">
       <!-- Clear Button -->
-      <div class="col-lg col-md-6 my-2">
+      <div class="col-lg-4 my-2">
        <button id="btn-clear" class="btn w-75 px-4 btn-outline-danger">
         <i class="fa-solid fa-rotate-left me-1"></i>
         <span>Clear</span>
        </button>
       </div>
       <!-- Undo Button -->
-      <div class="col-lg col-md-6 my-2">
+      <div class="col-lg-4 my-2">
        <button id="btn-undo" class="btn w-75 px-4 btn-outline-warning">
         <i class="fa-solid fa-backward-step me-1"></i>
         <span>Undo</span>
        </button>
       </div>
       <!-- Download Button -->
-      <div class="col-lg col-md-6 my-2">
+      <div class="col-lg-4 my-2">
        <button id="btn-download" class="btn w-75 px-4 btn-outline-primary">
         <i class="fa-solid fa-download me-1"></i>
         <span>Download</span>
        </button>
       </div>
       <!-- Share Button -->
-      <div class="col-lg col-md-6 my-2">
+      <div class="col-lg-4 m-auto my-2">
         <button id="btn-share" class="btn w-75 px-4 btn-outline-success">
          <i class="fa-solid fa-share-from-square me-1"></i>
          <span>Share</span>
