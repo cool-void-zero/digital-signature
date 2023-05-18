@@ -23,13 +23,19 @@
 
     iframe {
         overflow: hidden;
-        
         position: absolute;
         top: 0px;
         left: 0px;
         width: 100%;
         height: 100%;
         z-index: 0;
+    }
+
+    /*
+        let color default size same with other input column
+    */
+    input[type="color"] {
+        min-width: 205px;
     }
 
     #preview-container {
@@ -41,6 +47,19 @@
   </style>
   <script>
     
+    const britishDatetime = (d = new Date(), UTC = 8) => {
+        d.setHours(d.getHours() + UTC);
+
+        const datetime = d.toISOString();
+        const date = datetime.substring(0, 10).split('-').reverse().join('/');
+        const time = datetime.substring(11, 19);
+
+        return { 
+            datetime: `${date} ${time}`, 
+            date, time 
+        };
+    }
+
     const setSignaturePad = ({
         id = "signature-canvas", 
         w = 300, h = 150, 
@@ -56,57 +75,73 @@
         y_id = "#adjust-y", 
         scale_id = "#adjust-scale"
     ) => ({
-        x: parseInt($(x_id).val()), 
-        y: parseInt($(y_id).val()), 
+        x: parseFloat($(x_id).val()), 
+        y: parseFloat($(y_id).val()), 
         scale: parseFloat($(scale_id).val()), 
     });
     
+    const colorHextoRGB = (hex_str = "#ff0000") => ({
+        r: parseInt(hex_str.substring(1, 3), 16), 
+        g: parseInt(hex_str.substring(3, 5), 16), 
+        b: parseInt(hex_str.substring(5, 7), 16), 
+    })
+
+    const getWatermark = ({
+        text_id = "#watermark-text", 
+        size_id = "#watermark-size", 
+        color_id = "#watermark-color", 
+        opacity_id = "#watermark-opacity", 
+
+        angle_id = "#watermark-angle", 
+        x_id = "#watermark-x", 
+        y_id = "#watermark-y", 
+    }) => ({
+        text: $(text_id).val(), 
+        size: parseInt($(size_id).val()), 
+        color: colorHextoRGB($(color_id).val()), 
+        opacity: parseFloat($(opacity_id).val()),  
+        
+        angle: parseFloat($(angle_id).val()), 
+        x: parseFloat($(x_id).val()), 
+        y: parseFloat($(y_id).val()), 
+    });
+
     //  calculate after rotate, text (watermark) center position
+    //  [calculation generate by Bing GPT]
     const getRotateXY = ({
         angle = 45, 
         //  start position
         start = {
-            //  xy
-            ...getAdjust(), 
-            width, height
+            x: getAdjust().x, 
+            y: getAdjust().y, 
+            width, height, 
         }, 
-        text = {
-            width, height
-        }, 
+        text = { width, height }, 
     }) => {
-        const rad = (angle * Math.PI) / 180;        // 角度转弧度
-        const centerX = adjust.x + (width / 2);     // 签名中心点 X 坐标
-        const centerY = adjust.y + (height / 2);    // 签名中心点 Y 坐标
+        const rad = (angle * Math.PI) / 180;            // 角度转弧度
+        const centerX = start.x + (start.width / 2);    // 签名中心点 X 坐标
+        const centerY = start.y + (start.height / 2);   // 签名中心点 Y 坐标
 
         // 计算旋转后的文本位置
         const x = 
-            centerX + 
-            (text_w / 2) * Math.cos(rad) + 
-            (text_h / 2) * Math.sin(rad) - 
-            text_w / 2;
+            centerX - 
+            (text.width / 2) * Math.cos(rad) - 
+            (text.height / 2) * Math.sin(rad); 
         const y =
             centerY -
-            (text_w / 2) * Math.sin(rad) +
-            (text_h / 2) * Math.cos(rad) -
-            text_h / 2;
-
-        // 绘制旋转后的文本
-        pages[i].drawText(text, {
-            rotate: degrees(angle),
-            x,
-            y,
-            size: text_size,
-            color: rgb(1, 0, 0),
-            opacity,
-        });
+            (text.width / 2) * Math.sin(rad) +
+            (text.height / 2) * Math.cos(rad) - 
+            (text.height / 2); 
         
-
+        return { x, y };
     }
 
-    const updateIframePDF = async(
+    const updateIframePDF = async({
         pdf_bytes, signed_base64 = "", 
-        adjust = getAdjust()
-    ) => {
+        adjust = getAdjust(), 
+        watermark = getWatermark({}), 
+        watermark_position = "auto", 
+    }) => {
         //  not selected pdf file
         if(!pdf_bytes) return;
 
@@ -115,42 +150,51 @@
         
         if(signed_base64 !== ""){
             //   text (pdf-lib) setting
-            const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+            const font = await pdfDoc.embedFont(PDFLib.StandardFonts.TimesRoman);
             const { rgb, degrees } = PDFLib;
-            const opacity = 0.25;
             //  convert signature to bytes and image (pdf-lib)
             const signed_bytes = await fetch(signed_base64).then((res) => res.arrayBuffer());
             const signed_object = await pdfDoc.embedPng(signed_bytes);
             const signed_image = signed_object.scale(adjust.scale);
             const { width, height } = signed_image;
             
-            console.log(`width: ${width}`);
-            console.log(`height: ${height}`);
-
             for(let i=0; i<pages.length; i++){
-                /*  
-                    [Prepare Watermark]
-                */
-                const datetime = new Date().toISOString();
-                const date = datetime.substring(0, 10).split('-').reverse().join('/');
-                const time = datetime.substring(11, 19);
-                const text = `Signed on ${date} ${time}`;
-                const text_size = 10;
-                const text_w = font.widthOfTextAtSize(text, text_size);
-                const text_h = font.sizeAtHeight(text_size);
-                
-                //  draw watermark
-                pages[i].drawText(text, {
-                    // rotate: degrees(45), 
-                    
-                    //  signature position - (text size half) + (signature size half)
-                    x: adjust.x - (text_w / 2) + (width / 2), 
-                    y: adjust.y - (text_h / 2) + (height / 2), 
+                const text_w = font.widthOfTextAtSize(watermark.text, watermark.size);
+                const text_h = font.sizeAtHeight(watermark.size);
+                //  pdf-lib color 1 = 100% = 255 
+                const [r, g, b] = [
+                    watermark.color.r / 255, 
+                    watermark.color.g / 255, 
+                    watermark.color.b / 255
+                ];
+                //  watermark position manually or auto
+                const { x, y } = (watermark_position === "auto")?
+                    getRotateXY({
+                        angle: watermark.angle, 
+                        start: {
+                            //  x, y, width, height, 
+                            ...adjust, 
+                            width, height, 
+                        }, 
+                        text: {
+                            width: text_w, 
+                            height: text_h, 
+                        }
+                    })
+                    :
+                    { ...watermark }
 
-                    size: text_size, 
-                    color: rgb(1, 0, 0), 
+                $("#watermark-x").val(x.toFixed(2));
+                $("#watermark-y").val(y.toFixed(2));
+
+                //  draw watermark
+                pages[i].drawText(watermark.text, {
+                    x, y, 
+                    size: watermark.size, 
+                    rotate: degrees(watermark.angle), 
                     
-                    opacity, 
+                    color: rgb(r, g, b), 
+                    opacity: watermark.opacity, 
                 });
                 
                 //  draw signature
@@ -204,10 +248,15 @@
             w: parseFloat(url.searchParams.get("w") || 300), 
             h: parseFloat(url.searchParams.get("h") || 150), 
         });
+        //  set default watermark text
+        $("#watermark-text").val(`Signed on ${britishDatetime().datetime}`);
 
         //  when stop signing will update the preview iframe
         signature_pad.addEventListener("endStroke", () => {
-            updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+            updateIframePDF({
+                pdf_bytes, 
+                signed_base64: signatue_canvas.toDataURL()
+            });
         });
 
         $("#origin-pdf").bind("change", function(){
@@ -219,7 +268,7 @@
                 fileReader.onload = function(){
                     //  get selected pdf file bytes
                     pdf_bytes = new Uint8Array(this.result);
-                    updateIframePDF(pdf_bytes);
+                    updateIframePDF({ pdf_bytes });
                 };
 
                 fileReader.readAsArrayBuffer(file);
@@ -230,7 +279,30 @@
             Adjust Signature
         */
         $("#adjust-x, #adjust-y, #adjust-scale").bind("change", () => {
-            updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+            updateIframePDF({
+                pdf_bytes, 
+                signed_base64: signatue_canvas.toDataURL()
+            });
+        });
+
+        /*
+            Watermark 
+        */
+        $(` #watermark-text, #watermark-size, #watermark-color, 
+            #watermark-opacity, #watermark-angle`)
+            .bind("change", () => {
+                updateIframePDF({
+                    pdf_bytes, 
+                    signed_base64: signatue_canvas.toDataURL()
+                });
+            });
+        
+        $("#watermark-x, #watermark-y").bind("change", () => {
+            updateIframePDF({
+                pdf_bytes, 
+                signed_base64: signatue_canvas.toDataURL(), 
+                watermark_position: "manually"
+            });
         });
 
         /*
@@ -238,7 +310,7 @@
         */
         $("#btn-clear").bind("click", () => {
             signature_pad.clear();
-            updateIframePDF(pdf_bytes, "");
+            updateIframePDF({ pdf_bytes });
         });
 
         $("#btn-undo").bind("click", () => {
@@ -248,7 +320,13 @@
                 datas.pop();
                 signature_pad.fromData(datas);
 
-                updateIframePDF(pdf_bytes, signature_pad.isEmpty()? "": signatue_canvas.toDataURL());
+                signature_pad.isEmpty()?
+                    updateIframePDF({ pdf_bytes })
+                    :
+                    updateIframePDF({
+                    pdf_bytes, 
+                    signed_base64: signatue_canvas.toDataURL()
+                });
             }
         });
 
@@ -299,7 +377,7 @@
      <!-- Row: Choose PDF -->
      <div class="row mt-2">
       <div class="col">
-       <div class="my-5">
+       <div class="my-4">
         <label for="origin-pdf" class="form-label">
          <button class="btn px-4 btn-outline-success" onclick="$('#origin-pdf').click()">
           <i class="fa-solid fa-file-pdf"></i>
@@ -319,7 +397,7 @@
         <input id="adjust-x" class="form-control" type="number" min="0" step="5" value="255" />
         <label for="adjust-x">
          <i class="fa-solid fa-x me-1"></i>
-         <span>Adjust x-axis</span>
+         <span>Adjust X-Axis</span>
         </label>
        </div>
       </div>
@@ -328,23 +406,99 @@
          <input id="adjust-y" class="form-control" type="number" min="0" step="5" value="45" />
          <label for="adjust-y">
           <i class="fa-solid fa-y me-1"></i>
-          <span>Adjust y-axis</span>
+          <span>Adjust Y-Axis</span>
          </label>
         </div>
       </div>
       
       <div class="col-md-auto">
         <div class="form-floating">
-         <input id="adjust-scale" class="form-control" type="number" min="0.1" step="0.1" value="0.3" />
+         <input id="adjust-scale" class="form-control" type="number" min="0.1" step="0.05" value="0.3" />
          <label for="adjust-scale">
           <i class="fa-solid fa-maximize me-1"></i>
-          <span>Adjust scale</span>
+          <span>Adjust Scale</span>
          </label>
         </div>
       </div>
 
      </div>
      <!-- End of Row: Adjust Signature -->
+     <!-- Row: Watermark -->
+     <div class="row justify-content-md-center mt-3">
+      <!-- Font Text -->
+      <div class="col-md-3">
+       <div class="form-floating">
+         <input id="watermark-text" class="form-control" type="text" />
+         <label for="watermark-text">
+          <i class="fa-solid fa-file-lines me-1"></i>
+          <span>Watermark Text</span>
+         </label>
+       </div>
+      </div>
+      <!-- Font Size -->
+      <div class="col-md-3">
+       <div class="form-floating">
+        <input id="watermark-size" class="form-control" type="number" min="1" value="10" />
+        <label for="watermark-size">
+         <i class="fa-solid fa-font me-1"></i>
+         <span>Watermark Size</span>
+        </label>
+       </div>
+      </div>
+      <!-- Font Color -->
+      <div class="col-md-3">
+       <div class="form-floating">
+        <input id="watermark-color" class="form-control" type="color" min="1" value="#941818" />
+        <label for="watermark-color">
+         <i class="fa-solid fa-palette me-1"></i>
+         <span>Watermark Color</span>
+        </label>
+       </div>
+      </div>
+      <!-- Font Opacity -->
+      <div class="col-md-3">
+       <div class="form-floating">
+        <input id="watermark-opacity" class="form-control" type="number" min="0" max="1" step="0.05" value="0.5" />
+        <label for="watermark-opacity">
+         <i class="fa-solid fa-eye me-1"></i>
+         <span>Watermark Opacity</span>
+        </label>
+       </div>
+      </div>
+      <!-- End of Row: Text, Size, Color -->
+      <!-- Angle -->
+      <div class="col-md-auto">
+       <div class="form-floating">
+        <input id="watermark-angle" class="form-control" type="number" min="-365" step="5" value="45" />
+        <label for="watermark-angle">
+         <i class="fa-solid fa-arrows-spin me-1"></i>
+         <span>Watermark Angle</span>
+        </label>
+       </div>
+      </div>
+      <!-- X -->
+      <div class="col-md-auto">
+       <div class="form-floating">
+        <input id="watermark-x" class="form-control" type="number" min="0" step="5" value="255" />
+        <label for="watermark-x">
+         <i class="fa-solid fa-x me-1"></i>
+         <span>Watermark X-Axis</span>
+        </label>
+       </div>
+      </div>
+      <!-- Y -->
+      <div class="col-md-auto">
+       <div class="form-floating">
+        <input id="watermark-y" class="form-control" type="number" min="0" step="5" value="45" />
+        <label for="watermark-y">
+         <i class="fa-solid fa-y me-1"></i>
+         <span>Watermark Y-Axis</span>
+        </label>
+       </div>
+      </div>
+      <!-- End of Row: Angle, X, Y -->
+     </div>
+     <!-- End of Row: Watermark -->
      <!-- Row: Signature Canvas -->
      <div class="row my-5">
       <div class="col">
