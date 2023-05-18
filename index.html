@@ -20,7 +20,7 @@
     html, body {
         height: 100%;
     }
-
+    
     iframe {
         overflow: hidden;
         position: absolute;
@@ -278,6 +278,13 @@
         /*
             Adjust Signature
         */
+        $("#signature-width, #signature-height").bind("change", () => {
+            const w = parseInt($("#signature-width").val());
+            const h = parseInt($("#signature-height").val());
+            
+            setSignaturePad({ w, h });
+        });
+
         $("#adjust-x, #adjust-y, #adjust-scale").bind("change", () => {
             updateIframePDF({
                 pdf_bytes, 
@@ -368,7 +375,7 @@
 
   </script>
  </head>
- <body>
+ <body class="text-light bg-dark">
 
   <div class="container-fluid min-vh-100">
    <div class="row m-0 w-100 min-vh-100 text-center d-flex align-items-center">
@@ -390,33 +397,93 @@
       </div>
      </div>
      <!-- End of Row: Choose PDF -->
+
+     <!-- Switches: Adjust & Watermark -->
+     <div class="row align-items-center justify-content-md-center">
+      <div class="col-6 col-lg-4">
+       <button 
+            id="btn-setting" type="button" class="btn px-4 btn-outline-primary"
+            data-bs-toggle="collapse" data-bs-target="#collapse-setting" aria-expanded="false"
+       >
+        <i class="fa-solid fa-gear"></i>
+        <span>Setting</span>
+       </button>
+      </div>
+      <div class="col-6 col-lg-4 pe-4">
+       <div class="form-check form-switch form-check-reverse">
+        <input id="chk-watermark" class="form-check-input" type="checkbox" role="switch" checked />
+        <label for="chk-watermark" class="form-check-label">
+         <i class="fa-solid fa-paintbrush me-1"></i>
+         <span>Watermark</span>
+        </label>
+       </div>
+      </div>
+     </div>
+
+     <!-- Collapse: Setting -->
+     <div class="collapse" id="collapse-setting">
      <!-- Row: Adjust Signature -->
+     <div class="row justify-content-md-center mt-4">
+      <!-- Width -->
+      <div class="col-md-auto">
+       <div class="form-floating">
+        <input id="signature-width" class="form-control" type="number" min="100" step="10" value="300" />
+        <label for="signature-width">
+         <i class="fa-solid fa-x me-1"></i>
+         <span>Signature Width</span>
+        </label>
+       </div>
+      </div>
+      <!-- Height -->
+      <div class="col-md-auto">
+       <div class="form-floating">
+        <input id="signature-height" class="form-control" type="number" min="100" step="10" value="150" />
+        <label for="signature-width">
+         <i class="fa-solid fa-x me-1"></i>
+         <span>Signature Height</span>
+        </label>
+       </div>
+      </div>
+      <!-- Color -->
+      <div class="col-md-auto">
+        <div class="form-floating">
+         <input id="signature-width" class="form-control" type="color" value="#000000" />
+         <label for="signature-width">
+          <i class="fa-solid fa-x me-1"></i>
+          <span>Signature Color</span>
+         </label>
+        </div>
+       </div>
+     </div>
+     <!-- Row: Signature X-Axis, Y-Axis, Scale -->
      <div class="row justify-content-md-center">
+      <!-- X-Axis -->
       <div class="col-md-auto">
        <div class="form-floating">
         <input id="adjust-x" class="form-control" type="number" min="0" step="5" value="255" />
         <label for="adjust-x">
          <i class="fa-solid fa-x me-1"></i>
-         <span>Adjust X-Axis</span>
+         <span>Signature X-Axis</span>
         </label>
        </div>
       </div>
+      <!-- Y-Axis -->
       <div class="col-md-auto">
         <div class="form-floating">
          <input id="adjust-y" class="form-control" type="number" min="0" step="5" value="45" />
          <label for="adjust-y">
           <i class="fa-solid fa-y me-1"></i>
-          <span>Adjust Y-Axis</span>
+          <span>Signature Y-Axis</span>
          </label>
         </div>
       </div>
-      
+      <!-- Scale (Size) -->
       <div class="col-md-auto">
         <div class="form-floating">
          <input id="adjust-scale" class="form-control" type="number" min="0.1" step="0.05" value="0.3" />
          <label for="adjust-scale">
           <i class="fa-solid fa-maximize me-1"></i>
-          <span>Adjust Scale</span>
+          <span>Signature Scale (Size)</span>
          </label>
         </div>
       </div>
@@ -424,17 +491,21 @@
      </div>
      <!-- End of Row: Adjust Signature -->
      <!-- Row: Watermark -->
-     <div class="row justify-content-md-center mt-3">
-      <!-- Font Text -->
-      <div class="col-md-3">
-       <div class="form-floating">
+     <div class="row justify-content-md-center mt-4">
+      <div class="row justify-content-md-center">
+       <!-- Font Text -->
+       <div class="col-md-9">
+        <div class="form-floating">
          <input id="watermark-text" class="form-control" type="text" />
          <label for="watermark-text">
-          <i class="fa-solid fa-file-lines me-1"></i>
+          <i class="fa-solid fa-comment-dots me-1"></i>
           <span>Watermark Text</span>
          </label>
+        </div>
        </div>
       </div>
+     <!-- Row: Size, Color, Opacity -->
+     <div class="row justify-content-md-center">
       <!-- Font Size -->
       <div class="col-md-3">
        <div class="form-floating">
@@ -465,7 +536,10 @@
         </label>
        </div>
       </div>
-      <!-- End of Row: Text, Size, Color -->
+     </div>
+     <!-- End of Row: Size, Color, Opacity -->
+     <!-- Row: Angle, X, Y -->
+     <div class="row justify-content-md-center">
       <!-- Angle -->
       <div class="col-md-auto">
        <div class="form-floating">
@@ -497,13 +571,17 @@
        </div>
       </div>
       <!-- End of Row: Angle, X, Y -->
+      </div>
      </div>
      <!-- End of Row: Watermark -->
+     </div>
+     <!-- End of Collapse: Setting -->
+
      <!-- Row: Signature Canvas -->
      <div class="row my-5">
       <div class="col">
        <canvas 
-        id="signature-canvas" class="rounded" 
+        id="signature-canvas" class="bg-light rounded" 
         height="150" width="300" 
         style="border: 3px solid black"
        ></canvas>
