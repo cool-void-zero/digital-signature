@@ -70,6 +70,9 @@
         canvas_element.height = h;
     }
 
+    const isUseWatermark = (id = "chk-watermark") => 
+        document.getElementById(id).checked;
+
     const getAdjust = (
         x_id = "#adjust-x", 
         y_id = "#adjust-y", 
@@ -276,7 +279,56 @@
         });
         
         /*
-            Adjust Signature
+            Theme Mode
+        */
+        $("#theme-mode").bind("click", () => {
+            const element = $("#theme-mode");
+            const is_dark = element.attr("class").includes("moon");
+
+            if(is_dark){
+                //  toggle web page
+                $(document.body).addClass("text-dark");
+                $(document.body).addClass("bg-light");
+                $(document.body).removeClass("bg-dark");
+                $(document.body).removeClass("text-light");
+
+                //  toggle theme icon class
+                element.addClass("fa-sun");
+                element.addClass("text-warning");
+                element.removeClass("fa-moon");
+            }
+            else{
+                //  toggle web page
+                $(document.body).addClass("bg-dark");
+                $(document.body).addClass("text-light");
+                $(document.body).removeClass("text-dark");
+                $(document.body).removeClass("bg-light");
+                
+                //  toggle theme icon class
+                element.removeClass("fa-sun");
+                element.removeClass("text-warning");
+                element.addClass("fa-moon");
+            }
+        });
+
+        /*
+            Setting
+        */
+        $("#chk-watermark").bind("change", () => {
+            const ele = $("#watermark-setting-container");
+
+            if(isUseWatermark()){
+                ele.addClass("d-block");
+                ele.removeClass("d-none");
+            }
+            else{
+                ele.addClass("d-none");
+                ele.removeClass("d-block");
+            }
+        });
+
+        /*
+            Signature
         */
         $("#signature-width, #signature-height").bind("change", () => {
             const w = parseInt($("#signature-width").val());
@@ -313,7 +365,7 @@
         });
 
         /*
-            Signature (Clear, Undo, Confirm)
+            Button Group (Clear, Undo, Confirm)
         */
         $("#btn-clear").bind("click", () => {
             signature_pad.clear();
@@ -379,6 +431,14 @@
 
   <div class="container-fluid min-vh-100">
    <div class="row m-0 w-100 min-vh-100 text-center d-flex align-items-center">
+    <!-- Theme Mode -->
+    <div class="position-absolute top-0 left-0 mt-3 ms-1 w-auto p-0">
+     <p class="fs-3 m-0">
+      <a href="#">
+       <i id="theme-mode" class="fa-solid fa-moon"></i>
+      </a>
+     </p>
+    </div>
     <!-- Input PDF File & Signature -->
     <div class="col-md min-vh-100 p-0">
      <!-- Row: Choose PDF -->
@@ -402,7 +462,7 @@
      <div class="row align-items-center justify-content-md-center">
       <div class="col-6 col-lg-4">
        <button 
-            id="btn-setting" type="button" class="btn px-4 btn-outline-primary"
+            id="btn-setting" type="button" class="btn px-5 btn-outline-primary"
             data-bs-toggle="collapse" data-bs-target="#collapse-setting" aria-expanded="false"
        >
         <i class="fa-solid fa-gear"></i>
@@ -424,33 +484,39 @@
      <div class="collapse" id="collapse-setting">
      <!-- Row: Adjust Signature -->
      <div class="row justify-content-md-center mt-4">
+      <div class="row justify-content-md-center m-0 p-0">
+       <!-- Title -->
+       <div class="col-12">
+        <p class="fs-3"><b>Signature</b></p>
+       </div>
+      </div>
       <!-- Width -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="signature-width" class="form-control" type="number" min="100" step="10" value="300" />
         <label for="signature-width">
-         <i class="fa-solid fa-x me-1"></i>
-         <span>Signature Width</span>
+         <i class="fa-solid fa-left-right me-1"></i>
+         <span>Width</span>
         </label>
        </div>
       </div>
       <!-- Height -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="signature-height" class="form-control" type="number" min="100" step="10" value="150" />
         <label for="signature-width">
-         <i class="fa-solid fa-x me-1"></i>
-         <span>Signature Height</span>
+         <i class="fa-solid fa-up-down me-1"></i>
+         <span>Height</span>
         </label>
        </div>
       </div>
       <!-- Color -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
         <div class="form-floating">
          <input id="signature-width" class="form-control" type="color" value="#000000" />
          <label for="signature-width">
           <i class="fa-solid fa-x me-1"></i>
-          <span>Signature Color</span>
+          <span>Color</span>
          </label>
         </div>
        </div>
@@ -458,32 +524,32 @@
      <!-- Row: Signature X-Axis, Y-Axis, Scale -->
      <div class="row justify-content-md-center">
       <!-- X-Axis -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="adjust-x" class="form-control" type="number" min="0" step="5" value="255" />
         <label for="adjust-x">
          <i class="fa-solid fa-x me-1"></i>
-         <span>Signature X-Axis</span>
+         <span>X-Axis</span>
         </label>
        </div>
       </div>
       <!-- Y-Axis -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
         <div class="form-floating">
          <input id="adjust-y" class="form-control" type="number" min="0" step="5" value="45" />
          <label for="adjust-y">
           <i class="fa-solid fa-y me-1"></i>
-          <span>Signature Y-Axis</span>
+          <span>Y-Axis</span>
          </label>
         </div>
       </div>
       <!-- Scale (Size) -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
         <div class="form-floating">
          <input id="adjust-scale" class="form-control" type="number" min="0.1" step="0.05" value="0.3" />
          <label for="adjust-scale">
           <i class="fa-solid fa-maximize me-1"></i>
-          <span>Signature Scale (Size)</span>
+          <span>Scale (Size)</span>
          </label>
         </div>
       </div>
@@ -491,82 +557,88 @@
      </div>
      <!-- End of Row: Adjust Signature -->
      <!-- Row: Watermark -->
-     <div class="row justify-content-md-center mt-4">
-      <div class="row justify-content-md-center">
+     <div id="watermark-setting-container" class="row justify-content-md-center mt-4">
+      <div class="row justify-content-md-center m-0 p-0">
+       <!-- Title -->
+       <div class="col-12">
+        <p class="fs-3"><b>Watermark</b></p>
+       </div>
+      </div>
+      <div class="row justify-content-md-center m-0 p-0">
        <!-- Font Text -->
-       <div class="col-md-9">
+       <div class="col-md-9 col-lg-6">
         <div class="form-floating">
          <input id="watermark-text" class="form-control" type="text" />
          <label for="watermark-text">
           <i class="fa-solid fa-comment-dots me-1"></i>
-          <span>Watermark Text</span>
+          <span>Text</span>
          </label>
         </div>
        </div>
       </div>
      <!-- Row: Size, Color, Opacity -->
-     <div class="row justify-content-md-center">
+     <div class="row justify-content-md-center m-0 p-0">
       <!-- Font Size -->
-      <div class="col-md-3">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="watermark-size" class="form-control" type="number" min="1" value="10" />
         <label for="watermark-size">
          <i class="fa-solid fa-font me-1"></i>
-         <span>Watermark Size</span>
+         <span>Size</span>
         </label>
        </div>
       </div>
       <!-- Font Color -->
-      <div class="col-md-3">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="watermark-color" class="form-control" type="color" min="1" value="#941818" />
         <label for="watermark-color">
          <i class="fa-solid fa-palette me-1"></i>
-         <span>Watermark Color</span>
+         <span>Color</span>
         </label>
        </div>
       </div>
       <!-- Font Opacity -->
-      <div class="col-md-3">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
-        <input id="watermark-opacity" class="form-control" type="number" min="0" max="1" step="0.05" value="0.5" />
+        <input id="watermark-opacity" class="form-control" type="number" min="0" step="0.05" value="0.5" />
         <label for="watermark-opacity">
          <i class="fa-solid fa-eye me-1"></i>
-         <span>Watermark Opacity</span>
+         <span>Opacity</span>
         </label>
        </div>
       </div>
      </div>
      <!-- End of Row: Size, Color, Opacity -->
      <!-- Row: Angle, X, Y -->
-     <div class="row justify-content-md-center">
+     <div class="row justify-content-md-center m-0 p-0">
       <!-- Angle -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="watermark-angle" class="form-control" type="number" min="-365" step="5" value="45" />
         <label for="watermark-angle">
          <i class="fa-solid fa-arrows-spin me-1"></i>
-         <span>Watermark Angle</span>
+         <span>Angle</span>
         </label>
        </div>
       </div>
       <!-- X -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="watermark-x" class="form-control" type="number" min="0" step="5" value="255" />
         <label for="watermark-x">
          <i class="fa-solid fa-x me-1"></i>
-         <span>Watermark X-Axis</span>
+         <span>X-Axis</span>
         </label>
        </div>
       </div>
       <!-- Y -->
-      <div class="col-md-auto">
+      <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="watermark-y" class="form-control" type="number" min="0" step="5" value="45" />
         <label for="watermark-y">
          <i class="fa-solid fa-y me-1"></i>
-         <span>Watermark Y-Axis</span>
+         <span>Y-Axis</span>
         </label>
        </div>
       </div>
