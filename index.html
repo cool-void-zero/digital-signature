@@ -61,6 +61,48 @@
         scale: parseFloat($(scale_id).val()), 
     });
     
+    //  calculate after rotate, text (watermark) center position
+    const getRotateXY = ({
+        angle = 45, 
+        //  start position
+        start = {
+            //  xy
+            ...getAdjust(), 
+            width, height
+        }, 
+        text = {
+            width, height
+        }, 
+    }) => {
+        const rad = (angle * Math.PI) / 180;        // 角度转弧度
+        const centerX = adjust.x + (width / 2);     // 签名中心点 X 坐标
+        const centerY = adjust.y + (height / 2);    // 签名中心点 Y 坐标
+
+        // 计算旋转后的文本位置
+        const x = 
+            centerX + 
+            (text_w / 2) * Math.cos(rad) + 
+            (text_h / 2) * Math.sin(rad) - 
+            text_w / 2;
+        const y =
+            centerY -
+            (text_w / 2) * Math.sin(rad) +
+            (text_h / 2) * Math.cos(rad) -
+            text_h / 2;
+
+        // 绘制旋转后的文本
+        pages[i].drawText(text, {
+            rotate: degrees(angle),
+            x,
+            y,
+            size: text_size,
+            color: rgb(1, 0, 0),
+            opacity,
+        });
+        
+
+    }
+
     const updateIframePDF = async(
         pdf_bytes, signed_base64 = "", 
         adjust = getAdjust()
@@ -75,39 +117,47 @@
             //   text (pdf-lib) setting
             const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
             const { rgb, degrees } = PDFLib;
-            const opacity = 0.5;
+            const opacity = 0.25;
             //  convert signature to bytes and image (pdf-lib)
             const signed_bytes = await fetch(signed_base64).then((res) => res.arrayBuffer());
             const signed_object = await pdfDoc.embedPng(signed_bytes);
             const signed_image = signed_object.scale(adjust.scale);
             const { width, height } = signed_image;
             
+            console.log(`width: ${width}`);
+            console.log(`height: ${height}`);
+
             for(let i=0; i<pages.length; i++){
+                /*  
+                    [Prepare Watermark]
+                */
+                const datetime = new Date().toISOString();
+                const date = datetime.substring(0, 10).split('-').reverse().join('/');
+                const time = datetime.substring(11, 19);
+                const text = `Signed on ${date} ${time}`;
+                const text_size = 10;
+                const text_w = font.widthOfTextAtSize(text, text_size);
+                const text_h = font.sizeAtHeight(text_size);
+                
+                //  draw watermark
+                pages[i].drawText(text, {
+                    // rotate: degrees(45), 
+                    
+                    //  signature position - (text size half) + (signature size half)
+                    x: adjust.x - (text_w / 2) + (width / 2), 
+                    y: adjust.y - (text_h / 2) + (height / 2), 
+
+                    size: text_size, 
+                    color: rgb(1, 0, 0), 
+                    
+                    opacity, 
+                });
+                
+                //  draw signature
                 pages[i].drawImage(signed_object, {
                     ...adjust, 
                     width, height, 
                 });
-
-                /*  [Prepare Watermark]
-
-                const text = `A Sample Signature.`;
-                const text_w = font.widthOfTextAtSize(text, 18);
-                const text_h = font.sizeAtHeight(18);
-
-                console.log(`text_w: ${text_w}`);
-                console.log(`text_h: ${text_h}`);
-
-                pages[i].drawText(text, {
-                    x: adjust.x, 
-                    y: adjust.y - (width / 2), 
-                    // y: adjust.y + (text_h / 2), 
-
-                    size: 18, 
-                    color: rgb(1, 0, 0), 
-                    rotate: degrees(45), 
-                    opacity, 
-                });
-                */
             }
         }
         
@@ -188,7 +238,7 @@
         */
         $("#btn-clear").bind("click", () => {
             signature_pad.clear();
-            updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+            updateIframePDF(pdf_bytes, "");
         });
 
         $("#btn-undo").bind("click", () => {
@@ -198,7 +248,7 @@
                 datas.pop();
                 signature_pad.fromData(datas);
 
-                updateIframePDF(pdf_bytes, signatue_canvas.toDataURL());
+                updateIframePDF(pdf_bytes, signature_pad.isEmpty()? "": signatue_canvas.toDataURL());
             }
         });
 
@@ -266,7 +316,7 @@
      <div class="row justify-content-md-center">
       <div class="col-md-auto">
        <div class="form-floating">
-        <input id="adjust-x" class="form-control" type="number" min="0" step="5" value="275" />
+        <input id="adjust-x" class="form-control" type="number" min="0" step="5" value="255" />
         <label for="adjust-x">
          <i class="fa-solid fa-x me-1"></i>
          <span>Adjust x-axis</span>
