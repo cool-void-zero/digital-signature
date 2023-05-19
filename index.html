@@ -579,8 +579,11 @@
                 link.click();
             }
         });
-    
-        $("#btn-share").bind("click", () => {
+        
+        /*
+            Share Options
+        */
+        $("#share-native").bind("click", () => {
             const base64 = $("#pdf").attr("src").split(',')[1] || "";
 
             if(base64){
@@ -599,6 +602,18 @@
                         });
                 else
                     alert(`Your browser not support to share pdf file.`);
+            }
+        });
+
+        $("#share-base64-link").bind("click", () => {
+            const base64 = $("#pdf").attr("src");
+
+            if(base64){
+                navigator.clipboard.writeText(base64)
+                    .catch(err => {
+                        console.error(err);
+                        console.log(`Fail to copy text.`);
+                    });
             }
         });
     });
@@ -893,11 +908,20 @@
       </div>
       <!-- Share Button -->
       <div class="col-lg-4 m-auto my-2">
-        <button id="btn-share" class="btn w-75 px-4 btn-outline-success">
-         <i class="fa-solid fa-share-from-square me-1"></i>
-         <span>Share</span>
-        </button>
-       </div>
+       <button 
+        id="btn-share" type="button" 
+        data-bs-toggle="dropdown" aria-expanded="false"
+        class="btn w-75 px-4 btn-outline-success dropdown-toggle"
+       >
+        <i class="fa-solid fa-share-from-square me-1"></i>
+        <span>Share</span>
+       </button>
+       <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+        <li><a id="share-native" class="dropdown-item" href="#">Native Share</a></li>
+        <li><a id="share-base64-link" class="dropdown-item" href="#">Copy Base64 Link</a></li>
+       </ul>
+      </div>
+       
      </div>
      <!-- End of Row: Button Group -->
     </div>
