@@ -59,15 +59,89 @@
             date, time 
         };
     }
-
-    const setSignaturePad = ({
+    
+    const setSignatureFrame = ({
         id = "signature-canvas", 
-        w = 300, h = 150, 
+        w = getSignature().frame_width, 
+        h = getSignature().frame_height, 
     }) => {
         const canvas_element = document.getElementById(id);
+        const scale_x = w / canvas_element.width;
+        const scale_y = h / canvas_element.height;
 
         canvas_element.width = w;
         canvas_element.height = h;
+
+        return { scale_x, scale_y };
+    }
+
+    const setSignatureSetting = ({
+        pad, canvas, datas = pad.toData(), 
+        setting = getSignature(), 
+        scale_x = 1, 
+        scale_y = 1, 
+        //  keep = keep current position, resize = re-calculate new postion
+        type = "keep", 
+    }) => {
+        const { pen_min_width, pen_max_width } = setting;
+        const { r, g, b } = setting.pen_color;
+        const rgb = `rgb(${r}, ${g}, ${b})`;
+
+        //  re-initial
+        pad.clear();
+        pad = new SignaturePad(canvas);
+        pad.minWidth = pen_min_width;
+        pad.maxWidth = pen_max_width;
+        pad.penColor = rgb;
+        
+        if(type === "keep"){
+            datas = datas.map(data => {
+                data.minWidth = pen_min_width; 
+                data.maxWidth = pen_max_width; 
+                data.penColor = rgb; 
+
+                return data;
+            });
+        }
+        else if(type === "resize"){
+             // bounding box of the signature
+            let min_x = Number.MAX_VALUE; 
+            let min_y = Number.MAX_VALUE; 
+            let max_x = Number.MIN_VALUE; 
+            let max_y = Number.MIN_VALUE; 
+
+            // find the bounding box of the signature
+            datas.forEach(data => {
+                data.points.forEach(point => {
+                    if(point.x < min_x) min_x = point.x;
+                    if(point.y < min_y) min_y = point.y;
+                    if(point.x > max_x) max_x = point.x;
+                    if(point.y > max_y) max_y = point.y;
+                });
+            });
+
+            // Calculate the offset to center the signature
+            const offset_x = (canvas.width - (max_x - min_x) * scale_x) / 2 - min_x * scale_x;
+            const offset_y = (canvas.height - (max_y - min_y) * scale_y) / 2 - min_y * scale_y;
+            
+            //  reset the draw data to new rgb, min values
+            datas = datas.map(data => {
+                data.minWidth = pen_min_width; 
+                data.maxWidth = pen_max_width; 
+                data.penColor = rgb; 
+                
+                //  reset the points position
+                data.points.forEach(point => {
+                    point.x = point.x * scale_x + offset_x;
+                    point.y = point.y * scale_y + offset_y;
+                });
+
+                return data;
+            });
+        }
+
+        pad.fromData(datas);
+        return pad;
     }
 
     const isUseWatermark = (id = "chk-watermark") => 
@@ -87,8 +161,48 @@
         r: parseInt(hex_str.substring(1, 3), 16), 
         g: parseInt(hex_str.substring(3, 5), 16), 
         b: parseInt(hex_str.substring(5, 7), 16), 
-    })
+    });
 
+    const rgbString = ({ 
+        r = 0, g = 0, b = 0
+    }) => `rgb(${r}, ${g}, ${b})`
+
+    //  setting of signature
+    const getSignature = ({
+        frame_width_id = "#signature-width", 
+        frame_height_id = "#signature-height", 
+
+        pen_min_width_id = "#pen-min-width", 
+        pen_max_width_id = "#pen-max-width", 
+        pen_color_id = "#pen-color", 
+        
+        x_id = "#adjust-x", 
+        y_id = "#adjust-y", 
+        scale_id = "#adjust-scale"
+    } = {
+        frame_width_id: "#signature-width", 
+        frame_height_id: "#signature-height", 
+
+        pen_min_width_id: "#pen-min-width", 
+        pen_max_width_id: "#pen-max-width", 
+        pen_color_id: "#pen-color", 
+        
+        x_id: "#adjust-x", 
+        y_id: "#adjust-y", 
+    }) => ({
+        frame_heigh:  parseInt($(frame_height_id).val()), 
+        frame_width:  parseInt($(frame_width_id).val()), 
+        
+        pen_min_width: parseFloat($(pen_min_width_id).val()), 
+        pen_max_width: parseFloat($(pen_max_width_id).val()), 
+        pen_color: colorHextoRGB($(pen_color_id).val()), 
+
+        x: parseFloat($(x_id).val()), 
+        y: parseFloat($(y_id).val()), 
+        scale: parseFloat($(scale_id).val()), 
+    });
+
+    //  setting of watermark
     const getWatermark = ({
         text_id = "#watermark-text", 
         size_id = "#watermark-size", 
@@ -144,6 +258,9 @@
         adjust = getAdjust(), 
         watermark = getWatermark({}), 
         watermark_position = "auto", 
+        //  set delay to show  iframe pdf
+        //  (when src loading base64 pdf to iframe, when appear "flash" effect, not well to UX)
+        load_delay = 1000, 
     }) => {
         //  not selected pdf file
         if(!pdf_bytes) return;
@@ -161,51 +278,56 @@
             const signed_image = signed_object.scale(adjust.scale);
             const { width, height } = signed_image;
             
-            for(let i=0; i<pages.length; i++){
-                const text_w = font.widthOfTextAtSize(watermark.text, watermark.size);
-                const text_h = font.sizeAtHeight(watermark.size);
-                //  pdf-lib color 1 = 100% = 255 
-                const [r, g, b] = [
-                    watermark.color.r / 255, 
-                    watermark.color.g / 255, 
-                    watermark.color.b / 255
-                ];
-                //  watermark position manually or auto
-                const { x, y } = (watermark_position === "auto")?
-                    getRotateXY({
-                        angle: watermark.angle, 
-                        start: {
-                            //  x, y, width, height, 
-                            ...adjust, 
-                            width, height, 
-                        }, 
-                        text: {
-                            width: text_w, 
-                            height: text_h, 
-                        }
-                    })
-                    :
-                    { ...watermark }
-
-                $("#watermark-x").val(x.toFixed(2));
-                $("#watermark-y").val(y.toFixed(2));
-
-                //  draw watermark
-                pages[i].drawText(watermark.text, {
-                    x, y, 
-                    size: watermark.size, 
-                    rotate: degrees(watermark.angle), 
+            //  if switch on to use watermark, then draw watermark to each page
+            if(isUseWatermark()){
+                for(let i=0; i<pages.length; i++){
+                    const text_w = font.widthOfTextAtSize(watermark.text, watermark.size);
+                    const text_h = font.sizeAtHeight(watermark.size);
+                    //  pdf-lib color 1 = 100% = 255 
+                    const [r, g, b] = [
+                        watermark.color.r / 255, 
+                        watermark.color.g / 255, 
+                        watermark.color.b / 255
+                    ];
+                    //  watermark position manually or auto
+                    const { x, y } = (watermark_position === "auto")?
+                        getRotateXY({
+                            angle: watermark.angle, 
+                            start: {
+                                //  x, y, width, height, 
+                                ...adjust, 
+                                width, height, 
+                            }, 
+                            text: {
+                                width: text_w, 
+                                height: text_h, 
+                            }
+                        })
+                        :
+                        { ...watermark }
                     
-                    color: rgb(r, g, b), 
-                    opacity: watermark.opacity, 
-                });
-                
-                //  draw signature
+                    //  update the watermark xy values
+                    $("#watermark-x").val(x.toFixed(2));
+                    $("#watermark-y").val(y.toFixed(2));
+
+                    //  draw watermark
+                    pages[i].drawText(watermark.text, {
+                        x, y, 
+                        size: watermark.size, 
+                        rotate: degrees(watermark.angle), 
+                        
+                        color: rgb(r, g, b), 
+                        opacity: watermark.opacity, 
+                    });
+                }
+            }
+            
+            //  draw signature to each page
+            for(let i=0; i<pages.length; i++)
                 pages[i].drawImage(signed_object, {
                     ...adjust, 
                     width, height, 
                 });
-            }
         }
         
         const base64_uri = await pdfDoc.saveAsBase64({ dataUri: true });
@@ -219,7 +341,7 @@
                 new Promise(resolve => setTimeout(resolve, ms));
             
             if($("#pdf-1").length){
-                await delay(1000);
+                await delay(load_delay);
 
                 document.getElementById("pdf-1").style.zIndex = 100;
                 document.getElementById("preview-container").removeChild(document.getElementById("pdf"));
@@ -243,11 +365,16 @@
     $(document).ready(() => {
         const url = new URL(window.location.href);
         const signatue_canvas = document.getElementById("signature-canvas");
-        const signature_pad = new SignaturePad(signatue_canvas);
+        // const sign_setting = getSignature();
+        let signature_pad = new SignaturePad(signatue_canvas, {
+            penColor: rgbString(getSignature().pen_color), 
+            minWidth: getSignature().pen_min_width, 
+            maxWidth: getSignature().pen_max_width, 
+        });
         let pdf_bytes = null;
         
         //  set the signature pad with url parameter exist or default values
-        setSignaturePad({
+        setSignatureFrame({
             w: parseFloat(url.searchParams.get("w") || 300), 
             h: parseFloat(url.searchParams.get("h") || 150), 
         });
@@ -256,6 +383,12 @@
 
         //  when stop signing will update the preview iframe
         signature_pad.addEventListener("endStroke", () => {
+            signature_pad = setSignatureSetting({
+                pad: signature_pad, 
+                canvas: signatue_canvas, 
+                setting: getSignature(), 
+            });
+
             updateIframePDF({
                 pdf_bytes, 
                 signed_base64: signatue_canvas.toDataURL()
@@ -315,26 +448,72 @@
             Setting
         */
         $("#chk-watermark").bind("change", () => {
-            const ele = $("#watermark-setting-container");
+            const element = $("#watermark-setting-container");
 
             if(isUseWatermark()){
-                ele.addClass("d-block");
-                ele.removeClass("d-none");
+                element.addClass("d-block");
+                element.removeClass("d-none");
             }
             else{
-                ele.addClass("d-none");
-                ele.removeClass("d-block");
+                element.addClass("d-none");
+                element.removeClass("d-block");
             }
+            
+            updateIframePDF({
+                pdf_bytes, 
+                signed_base64: signatue_canvas.toDataURL()
+            });
         });
 
         /*
             Signature
         */
         $("#signature-width, #signature-height").bind("change", () => {
+            const datas = signature_pad.toData();
             const w = parseInt($("#signature-width").val());
             const h = parseInt($("#signature-height").val());
-            
-            setSignaturePad({ w, h });
+            const { scale_x, scale_y } = setSignatureFrame({ w, h });
+
+            signature_pad = setSignatureSetting({
+                pad: signature_pad, 
+                datas, 
+                canvas: signatue_canvas, 
+                setting: getSignature(), 
+                scale_x, scale_y, 
+                type: "resize", 
+            });
+
+            updateIframePDF({
+                pdf_bytes, 
+                signed_base64: signatue_canvas.toDataURL()
+            });
+        });
+        
+        $("#pen-min-width, #pen-max-width").bind("change", () => {
+            signature_pad = setSignatureSetting({
+                pad: signature_pad, 
+                canvas: signatue_canvas, 
+                setting: getSignature(), 
+            });
+
+            updateIframePDF({
+                pdf_bytes, 
+                signed_base64: signatue_canvas.toDataURL()
+            });
+        });
+
+        //  unknow bug, after set to new color, also remian previous color
+        $("#pen-color").bind("change", () => {
+            signature_pad = setSignatureSetting({
+                pad: signature_pad, 
+                canvas: signatue_canvas, 
+                setting: getSignature(), 
+            });
+
+            updateIframePDF({
+                pdf_bytes, 
+                signed_base64: signatue_canvas.toDataURL()
+            });
         });
 
         $("#adjust-x, #adjust-y, #adjust-scale").bind("change", () => {
@@ -482,45 +661,71 @@
 
      <!-- Collapse: Setting -->
      <div class="collapse" id="collapse-setting">
-     <!-- Row: Adjust Signature -->
+     <!-- Row: Signature -->
      <div class="row justify-content-md-center mt-4">
+      <!-- Row: Signature Title, Frame Width, Frame Height -->
       <div class="row justify-content-md-center m-0 p-0">
        <!-- Title -->
        <div class="col-12">
         <p class="fs-3"><b>Signature</b></p>
        </div>
       </div>
-      <!-- Width -->
+      <!-- Frame Width -->
       <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="signature-width" class="form-control" type="number" min="100" step="10" value="300" />
         <label for="signature-width">
          <i class="fa-solid fa-left-right me-1"></i>
-         <span>Width</span>
+         <span>Frame Width</span>
         </label>
        </div>
       </div>
-      <!-- Height -->
+      <!-- Frame Height -->
       <div class="col-md-auto mt-3">
        <div class="form-floating">
         <input id="signature-height" class="form-control" type="number" min="100" step="10" value="150" />
-        <label for="signature-width">
+        <label for="signature-height">
          <i class="fa-solid fa-up-down me-1"></i>
-         <span>Height</span>
+         <span>Frame Height</span>
+        </label>
+       </div>
+      </div>
+     </div>
+     <!-- End of Row: Signature Title, Frame Width, Frame Height -->
+     <!-- Row: Signature Pen Min Width, Max Width, Color -->
+     <div class="row justify-content-md-center">
+      <!-- Pen Min Width -->
+      <div class="col-md-auto mt-3">
+       <div class="form-floating">
+        <input id="pen-min-width" class="form-control" type="number" step="0.1" value="0.8" />
+        <label for="pen-min-width">
+         <i class="fa-solid fa-minimize me-1"></i>
+         <span>Pen Min Width</span>
+        </label>
+       </div>
+      </div>
+      <!-- Pen Max Width -->
+      <div class="col-md-auto mt-3">
+       <div class="form-floating">
+        <input id="pen-max-width" class="form-control" type="number" step="0.2" value="3" />
+        <label for="pen-max-width">
+         <i class="fa-solid fa-maximize me-1"></i>
+         <span>Pen Max Width</span>
         </label>
        </div>
       </div>
       <!-- Color -->
       <div class="col-md-auto mt-3">
-        <div class="form-floating">
-         <input id="signature-width" class="form-control" type="color" value="#000000" />
-         <label for="signature-width">
-          <i class="fa-solid fa-x me-1"></i>
-          <span>Color</span>
-         </label>
-        </div>
+       <div class="form-floating">
+        <input id="pen-color" class="form-control" type="color" value="#000000" />
+        <label for="pen-color">
+         <i class="fa-solid fa-palette me-1"></i>
+         <span>Pen Color</span>
+        </label>
        </div>
+      </div>
      </div>
+     <!-- End of Row: Signature Title, Frame Width, Frame Height -->
      <!-- Row: Signature X-Axis, Y-Axis, Scale -->
      <div class="row justify-content-md-center">
       <!-- X-Axis -->
