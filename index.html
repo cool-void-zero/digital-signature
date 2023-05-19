@@ -13,6 +13,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/signature_pad/4.1.5/signature_pad.umd.min.js" integrity="sha512-ngaalT22GGVs6hGMprLZ39ulFSdC/WUty7LR5AaFxpkDp5TUQ/w11WOIvZBktWOP/e9aA9m/xxpBUNDWpadROA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- pdf-lib 1.17.1 -->
   <script src="https://unpkg.com/pdf-lib"></script>
+  <!-- pdf.js -->
+  <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
   <!-- Fontawesome 6.4.0 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <style>
@@ -47,6 +49,76 @@
   </style>
   <script>
     
+    const pdfToPng = async(data, scale = 1.5) => {
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        let result_list = [];
+        
+        for(let i=1; i<=pdf.numPages; i++){
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale });
+            
+            // Create a canvas element
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            // Render the page into the canvas
+            const renderContext = {
+                canvasContext: context,
+                viewport,
+            };
+            
+            await page.render(renderContext).promise;
+            result_list.push(canvas.toDataURL());
+        }
+        
+        return result_list;
+    }
+
+    const getImageSize = (base64) => {
+        return new Promise(resolve => {
+            const image = new Image();
+
+            image.onload = () => {
+                // Get the image size
+                const width = image.width;
+                const height = image.height;
+
+                resolve({ width, height });
+            };
+            
+            image.src = base64;
+        });
+    }
+
+    const cropImage = ({
+        base64, x, y, 
+        width, height, 
+    }) => {
+        return new Promise((resolve) => {
+            // Create an image element
+            const image = new Image();
+
+            image.onload = () => {
+                // Create a canvas element
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const context = canvas.getContext('2d');
+
+                // Draw the cropped image onto the canvas
+                context.drawImage(image, x, y, width, height, 0, 0, width, height);
+
+                // Get the cropped image data
+                const croppedImageData = canvas.toDataURL();
+                resolve(croppedImageData);
+            };
+
+            image.src = base64;
+        });
+    }
+
     const britishDatetime = (d = new Date(), UTC = 8) => {
         d.setHours(d.getHours() + UTC);
 
@@ -362,6 +434,14 @@
         return bytes;
     }
 
+    const downloadBase64 = (base64, filename = "download.png") => {
+        const link = document.createElement ("a");
+        
+        link.href = base64;
+        link.download = filename;
+        link.click();
+    }
+
     $(document).ready(() => {
         const url = new URL(window.location.href);
         const signatue_canvas = document.getElementById("signature-canvas");
@@ -567,16 +647,97 @@
             }
         });
 
-        $("#btn-download").bind("click", () => {
-            if(signature_pad.isEmpty() )
+        /*
+            Download Options
+        */
+        $("#download-pdf-as-pdf").bind("click", () => {
+            if(signature_pad.isEmpty())
                 alert('Please provide a signature first.');
             else{
-                const base64_pdf = $("#pdf").attr("src");
-                const link = document.createElement ("a");
+                const base64 = $("#pdf").attr("src");
+                const filename = "Signed.pdf";
+
+                downloadBase64(base64, filename);
+            }
+        });
+
+        //  wait udpate zip the image list into .zip file
+        $("#download-pdf-as-png").bind("click", () => {
+            if(signature_pad.isEmpty())
+                alert('Please provide a signature first.');
+            else{
+                const base64_pdf = $("#pdf").attr("src").split(',')[1] || "";
+
+                if(base64_pdf){
+                    const data = base64ToBuffer(base64_pdf);
+                    const filename = "Signed";
+                    
+                    pdfToPng(data)
+                        .then(png_list => {
+                            for(let i=0; i<png_list.length; i++)
+                                downloadBase64(png_list[i], filename + `-${i}.png`);
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            console.log(`Fail to covnert base64 pdf to base64 png.`);
+                        });
+                }
+            }
+        });
+
+        $("#download-signed").bind("click", () => {
+            if(signature_pad.isEmpty())
+                alert('Please provide a signature first.');
+            else{
+                const base64 = signatue_canvas.toDataURL();
+                const filename = "Signature.png";
                 
-                link.href = base64_pdf;
-                link.download = "signed.pdf";
-                link.click();
+                downloadBase64(base64, filename);
+            }
+        });
+
+        $("#download-signed-watermark").bind("click", () => {
+            if(signature_pad.isEmpty())
+                alert('Please provide a signature first.');
+            else{
+                const base64_pdf = $("#pdf").attr("src").split(',')[1] || "";
+
+                if(base64_pdf){
+                    const data = base64ToBuffer(base64_pdf);
+                    const scale = 1.5;
+                    
+                    pdfToPng(data, scale)
+                        .then(async png_list => {
+                            const pdf_base64 = png_list[0];
+                            const pdf_size = await getImageSize(pdf_base64);
+                            
+                            const signature = getSignature();
+                            const x = signature.x * scale;
+                            const y = pdf_size.height - (signature.y * scale) - (signature.frame_heigh / 2);
+                            
+                            console.log(`x: ${x}, y: ${y}`);
+
+                            cropImage({
+                                base64: pdf_base64, 
+                                x, y, 
+                                width: (signature.frame_width / 2), 
+                                height: (signature.frame_heigh / 2), 
+                            })
+                            .then(base64 => {
+                                const filename = "Signed (Watermark).png";
+
+                                downloadBase64(base64, filename);
+                            })
+                            .catch(err => {
+                                console.error(err);
+                                cosnole.log(`Fail to crop image.`);
+                            });
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            console.log(`Fail to convert base64 pdf to base64 png.`);
+                        });
+                }
             }
         });
         
@@ -901,10 +1062,39 @@
       </div>
       <!-- Download Button -->
       <div class="col-lg-4 my-2">
-       <button id="btn-download" class="btn w-75 px-4 btn-outline-primary">
-        <i class="fa-solid fa-download me-1"></i>
+       <button 
+        id="btn-download" type="button" 
+        data-bs-toggle="dropdown" aria-expanded="false"
+        class="btn w-75 px-4 btn-outline-primary dropdown-toggle"
+       >
+        <i class="fa-solid fa-share-from-square me-1"></i>
         <span>Download</span>
        </button>
+       <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+        <p class="mb-2 text-center">
+         <b><u>PDF File</u></b>
+        </p>
+        <li class="text-center">
+         <!-- PDF - Download as PDF -->
+         <a id="download-pdf-as-pdf" class="dropdown-item" href="#">Download as PDF</a>
+        </li>
+        <li class="text-center">
+         <!-- PDF - Download as PNG -->
+         <a id="download-pdf-as-png" class="dropdown-item" href="#">Download as PNG</a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <p class="mb-2 text-center">
+         <b><u>Signature</u></b>
+        </p>
+        <li class="text-center">
+         <!-- Signature - Original -->
+         <a id="download-signed" class="dropdown-item" href="#">Original</a>
+        </li>
+        <li class="text-center">
+         <!-- Signature - With Watermark -->
+         <a id="download-signed-watermark" class="dropdown-item" href="#">With Watermark</a>
+        </li>
+       </ul>
       </div>
       <!-- Share Button -->
       <div class="col-lg-4 m-auto my-2">
