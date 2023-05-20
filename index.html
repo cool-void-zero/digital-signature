@@ -307,17 +307,18 @@
         }, 
         text = { width, height }, 
     }) => {
-        const rad = (angle * Math.PI) / 180;            // 角度转弧度
-        const centerX = start.x + (start.width / 2);    // 签名中心点 X 坐标
-        const centerY = start.y + (start.height / 2);   // 签名中心点 Y 坐标
+        const rad = (angle * Math.PI) / 180;            //  角度转弧度
+        const centerX = start.x + (start.width / 2);    //  签名中心点 X 坐标
+        const centerY = start.y + (start.height / 2);   //  签名中心点 Y 坐标
 
-        // 计算旋转后的文本位置
+        //  计算旋转后的文本位置
         const x = 
             centerX - 
             (text.width / 2) * Math.cos(rad) - 
             (text.height / 2) * Math.sin(rad); 
         const y =
             centerY -
+            //  pdf-lib Y 偏移從底部開始
             (text.width / 2) * Math.sin(rad) +
             (text.height / 2) * Math.cos(rad) - 
             (text.height / 2); 
@@ -496,7 +497,7 @@
         $("#theme-mode").bind("click", () => {
             const element = $("#theme-mode");
             const is_dark = element.attr("class").includes("moon");
-
+            
             if(is_dark){
                 //  toggle web page
                 $(document.body).addClass("text-dark");
@@ -508,6 +509,9 @@
                 element.addClass("fa-sun");
                 element.addClass("text-warning");
                 element.removeClass("fa-moon");
+
+                //  toggle dropdown list background
+                $("ul.dropdown-menu").removeClass("dropdown-menu-dark");
             }
             else{
                 //  toggle web page
@@ -520,6 +524,9 @@
                 element.removeClass("fa-sun");
                 element.removeClass("text-warning");
                 element.addClass("fa-moon");
+
+                //  toggle dropdown list background
+                $("ul.dropdown-menu").addClass("dropdown-menu-dark");
             }
         });
 
@@ -906,7 +913,7 @@
       <!-- X-Axis -->
       <div class="col-md-auto mt-3">
        <div class="form-floating">
-        <input id="signature-x" class="form-control" type="number" min="0" step="5" value="255" />
+        <input id="signature-x" class="form-control" type="number" min="0" step="5" value="270" />
         <label for="signature-x">
          <i class="fa-solid fa-x me-1"></i>
          <span>X-Axis</span>
@@ -1067,32 +1074,68 @@
         data-bs-toggle="dropdown" aria-expanded="false"
         class="btn w-75 px-4 btn-outline-primary dropdown-toggle"
        >
-        <i class="fa-solid fa-share-from-square me-1"></i>
+        <i class="fa-solid fa-file me-1"></i>
         <span>Download</span>
        </button>
        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
         <p class="mb-2 text-center">
-         <b><u>PDF File</u></b>
+         <b><u>Signed PDF</u></b>
         </p>
-        <li class="text-center">
+        <li>
          <!-- PDF - Download as PDF -->
-         <a id="download-pdf-as-pdf" class="dropdown-item" href="#">Download as PDF</a>
+         <a id="download-pdf-as-pdf" class="dropdown-item" href="#">
+          <div class="row">
+           <div class="col-auto pe-0">
+            <i class="fa-solid fa-download"></i>
+           </div>
+           <div class="col">
+            PDF Format
+           </div>
+          </div>
+         </a>
         </li>
-        <li class="text-center">
+        <li>
          <!-- PDF - Download as PNG -->
-         <a id="download-pdf-as-png" class="dropdown-item" href="#">Download as PNG</a>
+         <a id="download-pdf-as-png" class="dropdown-item" href="#">
+          <div class="row">
+           <div class="col-auto pe-0">
+            <i class="fa-solid fa-download"></i>
+           </div>
+           <div class="col">
+            PNG Format
+           </div>
+          </div>
+         </a>
         </li>
         <li><hr class="dropdown-divider"></li>
         <p class="mb-2 text-center">
          <b><u>Signature</u></b>
         </p>
-        <li class="text-center">
+        <li>
          <!-- Signature - Original -->
-         <a id="download-signed" class="dropdown-item" href="#">Original</a>
+         <a id="download-signed" class="dropdown-item" href="#">
+          <div class="row">
+           <div class="col-auto pe-0">
+            <i class="fa-solid fa-download"></i>
+           </div>
+           <div class="col">
+            Original
+           </div>
+          </div>
+         </a>
         </li>
-        <li class="text-center">
+        <li>
          <!-- Signature - With Watermark -->
-         <a id="download-signed-watermark" class="dropdown-item" href="#">With Watermark</a>
+         <a id="download-signed-watermark" class="dropdown-item" href="#">
+          <div class="row">
+           <div class="col-auto pe-0">
+            <i class="fa-solid fa-download"></i>
+           </div>
+           <div class="col">
+            Watermark
+           </div>
+          </div>
+         </a>
         </li>
        </ul>
       </div>
@@ -1107,8 +1150,30 @@
         <span>Share</span>
        </button>
        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
-        <li><a id="share-native" class="dropdown-item" href="#">Native Share</a></li>
-        <li><a id="share-base64-link" class="dropdown-item" href="#">Copy Base64 Link</a></li>
+        <li>
+         <a id="share-native" class="dropdown-item" href="#">
+          <div class="row">
+           <div class="col-auto pe-0">
+            <i class="fa-solid fa-share-from-square"></i>
+           </div>
+           <div class="col">
+            Native Share
+           </div>
+          </div>
+         </a>
+        </li>
+        <li>
+         <a id="share-base64-link" class="dropdown-item" href="#">
+          <div class="row">
+           <div class="col-auto pe-0">
+            <i class="fa-solid fa-link"></i>
+           </div>
+           <div class="col">
+            Copy Base64 Link
+           </div>
+          </div>
+         </a>
+        </li>
        </ul>
       </div>
        
