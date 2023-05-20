@@ -4,6 +4,8 @@
   <title>Online Digital Signature</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta charset="utf-8" />
+  <!-- Fontawesome 6.4.0 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <!-- Bootstrap 5.3.0 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KK94CHFLLe+nY2dmCWGMq91rCGa5gtU4mk92HdvYe+M/SXH301p5ILy+dN9+nJOZ" crossorigin="anonymous">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe" crossorigin="anonymous"></script>
@@ -15,8 +17,10 @@
   <script src="https://unpkg.com/pdf-lib"></script>
   <!-- pdf.js -->
   <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
-  <!-- Fontawesome 6.4.0 -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <!-- jszip 3.10.1 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- File Saver 2.0.5 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js" integrity="sha512-Qlv6VSKh1gDKGoJbnyA5RMXYcvnpIqhO++MhIM2fStMcGT9i2T//tSwYFlcyoRRDcDZ+TYHpH8azBBCyhpSeqw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
 
     html, body {
@@ -49,6 +53,21 @@
   </style>
   <script>
     
+    /**
+     *  From file like "download.png", convert to:
+     *  { filename: "download", extension: "png" }
+     * 
+     *  @param file{string}
+     *  @returns {object}
+     **/
+    const getFile = (file) => {
+        const last_idx = file.lastIndexOf('.');
+        const filename = file.substring(0, last_idx);
+        const extension = file.substring(last_idx + 1);
+
+        return { filename, extension };
+    }
+
     const pdfToPng = async(data, scale = 1.5) => {
         const pdf = await pdfjsLib.getDocument({ data }).promise;
         let result_list = [];
@@ -331,7 +350,7 @@
         adjust = getAdjust(), 
         watermark = getWatermark({}), 
         watermark_position = "auto", 
-        //  set delay to show  iframe pdf
+        //  set delay to show iframe pdf
         //  (when src loading base64 pdf to iframe, when appear "flash" effect, not well to UX)
         load_delay = 1000, 
     }) => {
@@ -356,7 +375,7 @@
                 for(let i=0; i<pages.length; i++){
                     const text_w = font.widthOfTextAtSize(watermark.text, watermark.size);
                     const text_h = font.sizeAtHeight(watermark.size);
-                    //  pdf-lib color 1 = 100% = 255 
+                    //  pdf-lib color (1 = 100% = 255)
                     const [r, g, b] = [
                         watermark.color.r / 255, 
                         watermark.color.g / 255, 
@@ -452,6 +471,7 @@
             maxWidth: getSignature().pen_max_width, 
         });
         let pdf_bytes = null;
+        let origin_filename = "file";
         
         //  set the signature pad with url parameter exist or default values
         setSignatureFrame({
@@ -477,6 +497,7 @@
 
         $("#origin-pdf").bind("change", function(){
             const file = this.files[0];
+            origin_filename = file.name;
 
             if(file){
                 let fileReader = new FileReader();
@@ -658,37 +679,45 @@
             Download Options
         */
         $("#download-pdf-as-pdf").bind("click", () => {
-            if(signature_pad.isEmpty())
-                alert('Please provide a signature first.');
-            else{
-                const base64 = $("#pdf").attr("src");
-                const filename = "Signed.pdf";
+            const base64 = $("#pdf").attr("src");
+            let { filename, extension } = getFile(origin_filename);
+            filename = `${filename} (Signed).${extension}`;
 
-                downloadBase64(base64, filename);
-            }
+            downloadBase64(base64, filename);
         });
 
-        //  wait udpate zip the image list into .zip file
         $("#download-pdf-as-png").bind("click", () => {
-            if(signature_pad.isEmpty())
-                alert('Please provide a signature first.');
-            else{
-                const base64_pdf = $("#pdf").attr("src").split(',')[1] || "";
+            const base64_pdf = $("#pdf").attr("src").split(',')[1] || "";
 
-                if(base64_pdf){
-                    const data = base64ToBuffer(base64_pdf);
-                    const filename = "Signed";
-                    
-                    pdfToPng(data)
-                        .then(png_list => {
-                            for(let i=0; i<png_list.length; i++)
-                                downloadBase64(png_list[i], filename + `-${i}.png`);
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            console.log(`Fail to covnert base64 pdf to base64 png.`);
-                        });
-                }
+            if(base64_pdf){
+                const data = base64ToBuffer(base64_pdf);
+                
+                pdfToPng(data)
+                    .then(png_list => {
+                        let { filename } = getFile(origin_filename);
+                        filename = `${filename} (Signed)`;
+                        
+                        if(png_list.length === 1)
+                            downloadBase64(png_list[0], filename + ".png");
+                        else if(png_list.length > 1){
+                            const zip = new JSZip();
+                            const img = zip.folder("images");
+
+                            for(let i=0; i<png_list.length; i++){
+                                const base64 = png_list[i].split(',')[1] || "";
+
+                                img.file(`${filename} - ${(i + 1)}.png`, base64, { base64: true });
+                            }
+                            
+                            zip.generateAsync({ type: "blob" }).then(content => {
+                                saveAs(content, "download.zip");
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        console.log(`Fail to covnert base64 pdf to base64 png.`);
+                    });
             }
         });
 
