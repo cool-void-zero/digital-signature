@@ -53,6 +53,12 @@
   </style>
   <script>
     
+    const isUseWatermark = (id = "chk-watermark") => 
+        document.getElementById(id).checked;
+
+    const isWatermarkImage = (id = "watermark-image") => 
+        document.getElementById(id).src;
+
     /**
      *  From file like "download.png", convert to:
      *  { filename: "download", extension: "png" }
@@ -235,9 +241,6 @@
         return pad;
     }
 
-    const isUseWatermark = (id = "chk-watermark") => 
-        document.getElementById(id).checked;
-
     const getAdjust = (
         x_id = "#signature-x", 
         y_id = "#signature-y", 
@@ -353,6 +356,9 @@
         //  set delay to show iframe pdf
         //  (when src loading base64 pdf to iframe, when appear "flash" effect, not well to UX)
         load_delay = 1000, 
+
+        //  watermark image base64
+        watermark_base64 = $("#watermark-image").attr("src"), 
     }) => {
         //  not selected pdf file
         if(!pdf_bytes) return;
@@ -413,12 +419,42 @@
                     });
                 }
             }
-            
+
             //  draw signature to each page
             for(let i=0; i<pages.length; i++)
                 pages[i].drawImage(signed_object, {
                     ...adjust, 
                     width, height, 
+                });
+        }
+
+        //  if exist input watermark image
+        if(isUseWatermark() && watermark_base64){
+            const { degrees } = PDFLib;
+            //  watermark image base64 convert to bytes
+            const bytes = await fetch(watermark_base64).then(res => res.arrayBuffer());
+            const object = await pdfDoc.embedPng(bytes);
+            const scale = watermark.size / 10;
+            const image = object.scale(scale);
+            const { width, height } = image;
+            const { x, y } = getRotateXY({
+                angle: watermark.angle, 
+                start: {
+                    //  x, y, width, height, 
+                    x: watermark.x, y: watermark.y, 
+                    width: 0, height: 0, 
+                }, 
+                text: {
+                    width, height, 
+                }
+            });
+            
+            for(let i=0; i<pages.length; i++)
+                pages[i].drawImage(object, {
+                     x, y, 
+                    scale, width, height, 
+                    opacity: watermark.opacity, 
+                    rotate: degrees(watermark.angle), 
                 });
         }
         
@@ -472,6 +508,7 @@
         });
         let pdf_bytes = null;
         let origin_filename = "file";
+        // let watermark_image = null;
         
         //  set the signature pad with url parameter exist or default values
         setSignatureFrame({
@@ -633,6 +670,30 @@
         /*
             Watermark 
         */
+        $("#watermark-input").bind("change", function(){
+            const file = this.files[0];
+
+            if(file){
+                let fileReader = new FileReader();
+
+                fileReader.onload = function(){
+                    const base64 = this.result;
+                    const image = document.getElementById("watermark-image");
+                    
+                    image.onload = function(){
+                        updateIframePDF({ 
+                            pdf_bytes, 
+                            signed_base64: signatue_canvas.toDataURL() 
+                        });
+                    }
+
+                    $("#watermark-image").attr("src", base64);
+                };
+
+                fileReader.readAsDataURL(file);
+            }
+        });
+        
         $(` #watermark-text, #watermark-size, #watermark-color, 
             #watermark-opacity, #watermark-angle`)
             .bind("change", () => {
@@ -838,7 +899,7 @@
         <label for="origin-pdf" class="form-label">
          <button class="btn px-4 btn-outline-success" onclick="$('#origin-pdf').click()">
           <i class="fa-solid fa-file-pdf"></i>
-          <span>Input Your PDF</span>
+          <span>Input PDF</span>
          </button>
         </label>
         <!-- Hide Default File Input -->
@@ -981,8 +1042,25 @@
        </div>
       </div>
       <div class="row justify-content-md-center m-0 p-0">
-       <!-- Font Text -->
-       <div class="col-md-9 col-lg-6">
+       <!-- Watermark Image -->
+       <div class="col-md-6 col-lg-6 mt-3">
+        <label for="watermark-input" class="form-label">
+         <button class="btn px-4 btn-outline-primary" onclick="$('#watermark-input').click()">
+          <i class="fa-solid fa-file-image"></i>
+          <span>Input Image</span>
+         </button>
+        </label>
+        <!-- Hide Watermark Input & Image -->
+        <input 
+            id="watermark-input" class="form-control d-none" type="file" 
+            accept=".png, .jpg, .jpeg, .gif, tiff, .bmp, .svg"
+        />
+        <img src="" id="watermark-image" class="image-fuild d-none" />
+       </div>
+      </div>
+      <div class="row justify-content-md-center m-0 p-0">
+       <!-- Watermark Text -->
+       <div class="col-md-12 col-lg-6 mt-3">
         <div class="form-floating">
          <input id="watermark-text" class="form-control" type="text" />
          <label for="watermark-text">
