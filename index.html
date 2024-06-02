@@ -15,8 +15,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/signature_pad/4.1.5/signature_pad.umd.min.js" integrity="sha512-ngaalT22GGVs6hGMprLZ39ulFSdC/WUty7LR5AaFxpkDp5TUQ/w11WOIvZBktWOP/e9aA9m/xxpBUNDWpadROA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- pdf-lib 1.17.1 -->
   <script src="https://unpkg.com/pdf-lib"></script>
-  <!-- pdf.js -->
-  <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
+  <!-- pdf.js 4.3.136 -->
+  <script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs"></script>
   <!-- jszip 3.10.1 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <!-- File Saver 2.0.5 -->
@@ -75,6 +75,7 @@
     }
 
     const pdfToPng = async(data, scale = 1.5) => {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs";
         const pdf = await pdfjsLib.getDocument({ data }).promise;
         let result_list = [];
         
